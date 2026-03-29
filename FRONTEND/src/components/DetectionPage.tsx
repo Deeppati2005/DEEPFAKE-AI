@@ -93,6 +93,11 @@ export const DetectionPage = () => {
 
       const data = await response.json();
 
+      console.log('Full response from model:', data);
+      console.log('Prediction:', data.prediction);
+      console.log('Confidence:', data.confidence);
+      console.log('Message:', data.message);
+
       setResult({
         prediction: data.prediction,
         confidence: data.confidence * 100,
