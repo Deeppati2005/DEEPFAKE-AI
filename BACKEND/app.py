@@ -35,18 +35,12 @@ def load_model():
         
         logger.info(f"Loading model from {model_path}")
         
-        # Load the model - adjust based on your actual model architecture
-        # If it's a ResNet or similar, you may need to define the architecture first
-        model = torch.load(model_path, map_location=device, weights_only=False)
+        # Create ResNet18 architecture (matching the training code)
+        model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
+        model.fc = torch.nn.Linear(model.fc.in_features, 2)
         
-        # If model is a checkpoint with state_dict, load it differently
-        if isinstance(model, dict):
-            # If it's a state dict, you need to load it into a model architecture
-            model_state = model
-            # Create a default architecture (ResNet50 with 2 outputs for binary classification)
-            model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=False)
-            model.fc = torch.nn.Linear(model.fc.in_features, 2)
-            model.load_state_dict(model_state)
+        # Load the saved state dict
+        model.load_state_dict(torch.load(model_path, map_location=device))
         
         model.to(device)
         model.eval()  # Set to evaluation mode
@@ -58,10 +52,10 @@ def load_model():
         return True
 
 def create_dummy_model():
-    """Create a dummy ResNet model for testing purposes"""
+    """Create a dummy ResNet18 model for testing purposes"""
     global model
     try:
-        model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=False)
+        model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=False)
         model.fc = torch.nn.Linear(model.fc.in_features, 2)
         model.to(device)
         model.eval()
@@ -82,13 +76,13 @@ def preprocess_image(image_bytes):
         elif image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Define preprocessing transformations
+        # Define preprocessing transformations (matching training code)
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),  # Resize to 224x224
             transforms.ToTensor(),
             transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
+                mean=[0.5, 0.5, 0.5],
+                std=[0.5, 0.5, 0.5]
             )
         ])
         
@@ -108,21 +102,18 @@ def predict_deepfake(image_tensor):
         with torch.no_grad():
             output = model(image_tensor)
             
-            # Handle different output formats
-            if isinstance(output, tuple):
-                output = output[0]
+            # Get the predicted class
+            _, predicted = torch.max(output, 1)
             
-            # Get softmax probabilities
+            # Get probabilities for confidence
             probabilities = torch.nn.functional.softmax(output, dim=1)
+            confidence = probabilities[0][predicted.item()].item()
             
-            # Get prediction and confidence
-            confidence, predicted = torch.max(probabilities, 1)
+            # Map predictions: 0 = Fake, 1 = Real
+            classes = ['fake', 'real']
+            prediction = classes[predicted.item()]
             
-            # Map 0 = real, 1 = fake (adjust based on your model's training)
-            prediction = 'fake' if predicted.item() == 1 else 'real'
-            confidence_score = confidence.item()
-            
-            return prediction, confidence_score
+            return prediction, confidence
     except Exception as e:
         logger.error(f"Error in prediction: {e}")
         raise
